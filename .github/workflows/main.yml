@@ -1,0 +1,57 @@
+name: Build sys-botbase for Nintendo Switch
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  # 可选：打 tag 时发布 Release（取消注释下方两行）
+  # push:
+  #   tags: [ 'v*' ]
+
+jobs:
+  build:
+    name: Build sys-botbase .nro
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true  # 必须启用，因为 sys-botbase 依赖 libnx 等子模块
+
+      - name: Install devkitPro toolchain
+        run: |
+          sudo apt-get update
+          echo "deb http://apt.devkitpro.org stable main" | sudo tee /etc/apt/sources.list.d/devkitpro.list
+          wget -qO - https://apt.devkitpro.org/devkitpro-pub.gpg | sudo apt-key add -
+          sudo apt-get update
+          sudo apt-get install -y devkitA64 libnx
+
+      - name: Set environment variables
+        run: |
+          echo "DEVKITPRO=/opt/devkitpro" >> "$GITHUB_ENV"
+          echo "PATH=/opt/devkitpro/tools/bin:/opt/devkitpro/devkitA64/bin:$PATH" >> "$GITHUB_PATH"
+
+      - name: Build sys-botbase
+        run: make
+
+      - name: Verify .nro output
+        run: |
+          ls -la *.nro || (echo "❌ No .nro file found! Build may have failed." && exit 1)
+
+      - name: Upload .nro as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sys-botbase-nro
+          path: sys-botbase.nro
+          if-no-files-found: error
+
+      # === 可选：自动发布到 GitHub Release（仅限 tag）===
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: sys-botbase.nro
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
